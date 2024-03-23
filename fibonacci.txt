@@ -1,0 +1,23 @@
+
+
+.main
+    mvi r0, 0           
+    mvi r1, 1
+    mvi r2, 20
+.loop
+    subi r2, 1
+    beq done1
+    addr r0, r1
+    subi r2, 1
+    beq done0
+    addr r1, r0
+    bra loop
+
+.done0
+    str r0, 0x00
+    bra here
+.done1
+    str r1, 0x00
+
+.here
+    bra here
