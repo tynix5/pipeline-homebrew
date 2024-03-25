@@ -17,14 +17,14 @@
 #define NUM_REGS			8
 
 /* Instruction Types */
-#define NOP					0
+#define NOP				0
 #define IMMEDIATE			1
 #define BRANCH				2
 #define REGISTER			3
-#define RAM					4
+#define RAM				4
 #define STACK				5
 #define CALL				6
-#define RET					7
+#define RET				7
 #define JUMP				8
 #define DIRECTIVE			9
 
@@ -54,7 +54,7 @@ enum opcodes {
 	bra,
 	bne,
 	beq,
-    bhs,
+    	bhs,
 	blo,
 	bge,
 	blt,
