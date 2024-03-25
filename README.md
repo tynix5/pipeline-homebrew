@@ -71,12 +71,20 @@ Instruction Set
                 mvr r2, r3
                 0x82 0x03
 
-    Architecture
-        - 3 stage pipeline (fetch, decode/execute, writeback)
-        - 16 bit words and register width, byte addressable memory
-
     Stack
         - Stack pointer is 8 bits wide, allowing for 128 ints to be pushed onto stack
         - Stack does not allow for 1 byte to be pushed onto stack
         - Stack pointer starts at 0 and incremements (by 2) with every push
         - Stack resides in RAM from 0x0000 to 0x0100
+
+    Architecture
+        - 3 stage pipeline (fetch, decode/execute, writeback)
+        - 16 bit words and register width, byte addressable memory
+        - hbcp-main consists of ALU, register file, control unit, and pipeline combined
+        - hbcp-alu details the internals of the ALU unit
+        - hbcp-registerfile details the internals of the register file unit
+        - hbcp-control details the urom control signals
+        - urom.cpp is used to program each of the ROMs
+        - assembler.cpp is used to convert assembly file into machine code, which is uploaded into the ROM in hbcp-main
+
+
