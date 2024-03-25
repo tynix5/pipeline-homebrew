@@ -23,8 +23,10 @@
 #define REGISTER			3
 #define RAM					4
 #define STACK				5
-#define JUMP				6
-#define DIRECTIVE			7
+#define CALL				6
+#define RET					7
+#define JUMP				8
+#define DIRECTIVE			9
 
 #define BYTE_ADDRESSABLE	1
 //#define WORD_ADDRESSABLE	1
@@ -49,7 +51,7 @@ enum opcodes {
 	andi,
 	ori,
 	cmpi,
-	bra,	//
+	bra,
 	bne,
 	beq,
     bhs,
@@ -121,7 +123,7 @@ int main() {
 	ifstream prog;
 
 	bin.open("machine_code.bin", ios::out | ios::trunc | ios::binary);			// open new write file, replace old file with new file
-	prog.open("fibonacci.txt", ios::in);			// open program file for read-only mode
+	prog.open("function.txt", ios::in);			// open program file for read-only mode
 
 	
 	if (!bin.is_open()) {
@@ -333,8 +335,12 @@ int get_instruction_type(int opcode) {
 		return REGISTER;
 	if (opcode >= opcodes::ldr && opcode <= opcodes::strb)
 		return RAM;
-	if (opcode >= opcodes::push && opcode <= opcodes::ret)
+	if (opcode >= opcodes::push && opcode <= opcodes::pop)
 		return STACK;
+	if (opcode == opcodes::call)
+		return CALL;
+	if (opcode == opcodes::ret)
+		return RET;
 	if (opcode == opcodes::jmp)
 		return JUMP;
 	else 
@@ -435,7 +441,13 @@ int parse_label(string label, int line_num, int& pc) {
 		return FAIL;
 	}
 
-	// if label name is valid
+	// if label name is valid and label is not already taken
+	if (find(label_names.begin(), label_names.end(), label) != label_names.end()) {
+
+		cout << "\nLine " << line_num << ": Error... Cannot have multiple labels of same name" << endl;
+		return FAIL;
+	}
+
 	label_names.push_back(label);			// save label name
 	label_addresses.push_back(pc);				// save label address
 
@@ -468,8 +480,14 @@ int parse_instruction(char * line, int line_num, int& pc) {
 				pc += 2;								// 1 byte for opcode, 1 byte for relative displacement (1 word)
 			else if (instruction_type == REGISTER)
 				pc += 2;								// 1 byte for opcode + register, 1 byte for register (1 word)
-			else if (instruction_type == RAM)			
-				pc += 4;								// 1 byte for opcode, 1 for RAM address (1 word)
+			else if (instruction_type == RAM)
+				pc += 4;								// 1 byte for opcode, 1 empty, 2 bytes for RAM address (1 word)
+			else if (instruction_type == STACK)
+				pc += 2;								// 1 byte for opcode + register, 1 empty byte
+			else if (instruction_type == CALL)
+				pc += 4;								// 1 byte for opcode, 1 empty, 2 bytes for address
+			else if (instruction_type == RET)
+				pc += 2;								// 1 byte for opcode, 1 empty byte
 			else if (instruction_type == JUMP)
 				pc += 4;								// 1 byte opcode, 1 empty byte, 2 bytes absolute address
 			else if (opcode == -1) {			// if not an instruction...
@@ -493,12 +511,12 @@ int parse_instruction(char * line, int line_num, int& pc) {
 
 			string token_string(token);
 
-			if (instruction_type == NOP) {			// nop should have nothing after (if it did, it would have returned after end of first loop)
+			if (instruction_type == NOP || instruction_type == RET) {			// nop and ret should have nothing after (if it did, it would have returned after end of first loop)
 
-				cout << "\nLine " << line_num << ": Error... Unexpected [] after nop" << endl;
+				cout << "\nLine " << line_num << ": Error... Unexpected [] after instruction" << endl;
 				return FAIL;
 
-			} else if (instruction_type == IMMEDIATE || instruction_type == REGISTER || instruction_type == RAM) {		// immediate, register, load instructions both take registers for first operand
+			} else if (instruction_type == IMMEDIATE || instruction_type == REGISTER || instruction_type == RAM || instruction_type == STACK) {		// immediate, register, load instructions both take registers for first operand
 					
 				if (string_to_register(token) == -1) {		// if register doesn't match r0-r3
 
@@ -506,7 +524,7 @@ int parse_instruction(char * line, int line_num, int& pc) {
 					return FAIL;
 				}
 				
-			} else if (instruction_type == BRANCH || instruction_type == JUMP) {		// branch should just have an address after in the form of a label...
+			} else if (instruction_type == BRANCH || instruction_type == CALL || instruction_type == JUMP) {		// branch, call, and jump should just have an address after in the form of a label...
 
 				if (!is_valid_label(token_string)) {
 
@@ -523,14 +541,14 @@ int parse_instruction(char * line, int line_num, int& pc) {
 
 			string token_string(token);
 
-			 if (instruction_type == IMMEDIATE || instruction_type == RAM) {		// immediate and RAM instructions should have a number for second operand
+			 if (instruction_type == IMMEDIATE) {		// immediate instruction should have a number for second operand
 
 				if (!is_valid_immediate(token_string, 8)) {			// if immediate is not a valid number... fail
 					cout << "\nLine " << line_num << ": Error... Expected # (0b..., 0x..., dec)" << endl;
 					return FAIL;
 				}
 				
-			} else if (instruction_type == BRANCH || instruction_type == JUMP) {			// there should not be a second operand for branch instructions
+			} else if (instruction_type == BRANCH || instruction_type == CALL || instruction_type == JUMP) {			// there should not be a second operand for branch instructions
 
 				cout << "\nLine " << line_num << ": Error... Unexpected [] after branch" << endl;
 				return FAIL;
@@ -543,6 +561,18 @@ int parse_instruction(char * line, int line_num, int& pc) {
 					return FAIL;
 				}
 
+			} else if (instruction_type == RAM) {		// RAM instruction should have 16-bit address for second operand
+
+				if (!is_valid_immediate(token_string, 16)) {
+
+					cout << "\nLine " << line_num << ": Error... Expected # (0b..., 0x..., dec)" << endl;
+					return FAIL;
+				}
+				
+			} else if (instruction_type == STACK) {
+
+				cout << "\nLine " << line_num << ": Error... Unexpected [] after nop" << endl;
+				return FAIL;
 			}
 
 			add_token(token);
@@ -579,10 +609,10 @@ bool parse_instruction_early_exit(int instruction_type, int iteration, int line_
 		}
 	}
 
-	if (instruction_type == BRANCH || instruction_type == JUMP) {
+	if (instruction_type == BRANCH || instruction_type == STACK || instruction_type == CALL || instruction_type == JUMP) {
 		if (iteration == 1) {
 
-			cout << "\nLine " << line_num << ": Error... Missing label/branch address" << endl;
+			cout << "\nLine " << line_num << ": Error... Missing operand" << endl;
 			return true;
 		}
 	}
@@ -743,7 +773,7 @@ int assemble_file(ofstream &bin) {
 
 				if (opcode == opcodes::str || opcode == opcodes::ldr) {
 
-					if (immediate % 2 == 1)	{		// don't allow misaligned writes when using str and ldr
+					if (immediate % 2 == 1)	{		// don't allow misaligned writes or reads when using str and ldr
 
 						cout << "\nError... Misaligned writes and reads not allowed" << endl;
 						return FAIL;
@@ -755,6 +785,40 @@ int assemble_file(ofstream &bin) {
 				bin << (__int8) immediate;				// low byte of address
 			} 
 			
+		}
+		else if (instruction_type == STACK) {
+
+
+			pc += 2;
+
+			__int8 r_ds = string_to_register(*(token_num++));		// register to push/pop memory into/out
+
+			bin << (__int8) (high_byte | r_ds);
+			bin << (__int8) 0;
+		}
+		else if (instruction_type == CALL) {
+
+			pc += 4;
+
+			bin << (__int8) high_byte;
+			bin << (__int8) 0;
+
+			int label_address = get_label_address(*(token_num++));		// get address of label
+
+			if (label_address == -1) {
+
+				cout << "\nLine []: Error... Invalid reference to label [" << line << "]" << endl;
+				return FAIL;
+			}
+
+			bin << (__int8) (label_address >> 8);		// write high byte of address
+			bin << (__int8) (label_address);		// write low byte of address
+
+		}
+		else if (instruction_type == RET) {
+
+			bin << (__int8) high_byte;
+			bin << (__int8) 0;
 		}
 		else if (instruction_type == JUMP) {
 
